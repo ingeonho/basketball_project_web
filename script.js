@@ -2,8 +2,16 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const video = document.getElementById('webcam');
 
+// 메인 해상도 (640x480)
+const W = 640;
+const H = 480;
+
+// 고속 분석 전용 경량 해상도 (320x240)
+const SW = 320;
+const SH = 240;
+
 // =========================================================
-// [1. 동적 조절 변수 (기본값 설정)]
+// [1. 동적 파라미터 변수]
 // =========================================================
 let hoopCenter = [320, 220];
 let hoopRadius = 80;
@@ -23,19 +31,17 @@ let goalEffectTimer = 0;
 let prevBallCenter = null;
 let hasScoredThisEntry = false;
 
-// 이미지 처리 캔버스 (640x480)
+// 고속 영상 분석용 오프스크린 캔버스 및 버퍼
 const processCanvas = document.createElement('canvas');
 const processCtx = processCanvas.getContext('2d');
-processCanvas.width = 640;
-processCanvas.height = 480;
+processCanvas.width = SW;
+processCanvas.height = SH;
 
-const W = 640;
-const H = 480;
-const maskBuffer = new Uint8Array(W * H);
-const tempBuffer = new Uint8Array(W * H);
+const maskBuffer = new Uint8Array(SW * SH);
+const tempBuffer = new Uint8Array(SW * SH);
 
 // =========================================================
-// [2. 슬라이더 이벤트 연동]
+// [2. 슬라이더 바인딩 및 이벤트 처리]
 // =========================================================
 function bindSlider(inputId, valId, onUpdate) {
     const input = document.getElementById(inputId);
@@ -60,7 +66,7 @@ const toggleBtn = document.getElementById('togglePanelBtn');
 toggleBtn.addEventListener('click', () => panel.classList.toggle('collapsed'));
 
 // =========================================================
-// [3. RGB -> HSV 변환]
+// [3. RGB -> HSV 변환 (OpenCV 표준: H 0~179, S 0~255, V 0~255)]
 // =========================================================
 function rgbToHsv(r, g, b) {
     r /= 255;
@@ -91,50 +97,48 @@ function rgbToHsv(r, g, b) {
 }
 
 // =========================================================
-// [4. Erode & Dilate (그물 실 제거용)]
+// [4. 초고속 Erode & Dilate (초기화 보장 & 60 FPS 유지)]
 // =========================================================
-function erode(src, dst) {
-    for (let y = 1; y < H - 1; y++) {
-        for (let x = 1; x < W - 1; x++) {
-            let idx = y * W + x;
-            if (src[idx] === 1) {
-                if (src[idx - 1] && src[idx + 1] && src[idx - W] && src[idx + W]) {
-                    dst[idx] = 1;
-                } else {
-                    dst[idx] = 0;
-                }
-            } else {
-                dst[idx] = 0;
+function fastErode() {
+    tempBuffer.fill(0);
+    for (let y = 1; y < SH - 1; y++) {
+        let row = y * SW;
+        for (let x = 1; x < SW - 1; x++) {
+            let idx = row + x;
+            if (maskBuffer[idx] === 1 && maskBuffer[idx - 1] === 1 && maskBuffer[idx + 1] === 1 &&
+                maskBuffer[idx - SW] === 1 && maskBuffer[idx + SW] === 1) {
+                tempBuffer[idx] = 1;
             }
         }
     }
 }
 
-function dilate(src, dst) {
-    for (let y = 1; y < H - 1; y++) {
-        for (let x = 1; x < W - 1; x++) {
-            let idx = y * W + x;
-            if (src[idx] === 1) {
-                dst[idx] = 1;
-                dst[idx - 1] = 1;
-                dst[idx + 1] = 1;
-                dst[idx - W] = 1;
-                dst[idx + W] = 1;
-            } else {
-                if (dst[idx] !== 1) dst[idx] = 0;
+function fastDilate() {
+    maskBuffer.fill(0);
+    for (let y = 1; y < SH - 1; y++) {
+        let row = y * SW;
+        for (let x = 1; x < SW - 1; x++) {
+            let idx = row + x;
+            if (tempBuffer[idx] === 1) {
+                maskBuffer[idx] = 1;
+                maskBuffer[idx - 1] = 1;
+                maskBuffer[idx + 1] = 1;
+                maskBuffer[idx - SW] = 1;
+                maskBuffer[idx + SW] = 1;
             }
         }
     }
 }
 
 // =========================================================
-// [5. 프레임 트래킹 분석]
+// [5. 프레임 영상 분석]
 // =========================================================
 function processFrame() {
-    processCtx.drawImage(video, 0, 0, W, H);
-    const imgData = processCtx.getImageData(0, 0, W, H);
+    processCtx.drawImage(video, 0, 0, SW, SH);
+    const imgData = processCtx.getImageData(0, 0, SW, SH);
     const data = imgData.data;
 
+    // 1) HSV 마스킹
     for (let i = 0, p = 0; i < data.length; i += 4, p++) {
         let hsv = rgbToHsv(data[i], data[i + 1], data[i + 2]);
         if (hsv[0] >= lowerOrange[0] && hsv[0] <= upperOrange[0] &&
@@ -146,23 +150,23 @@ function processFrame() {
         }
     }
 
-    erode(maskBuffer, tempBuffer);
-    erode(tempBuffer, maskBuffer);
+    // 2) 고속 형태학적 연산 (그물 실 제거)
+    fastErode();
+    fastDilate();
 
-    dilate(maskBuffer, tempBuffer);
-    dilate(tempBuffer, maskBuffer);
-
+    // 3) 외곽 덩어리 중심 및 반지름 계산
     let totalX = 0,
         totalY = 0,
         count = 0;
-    let minX = W,
+    let minX = SW,
         maxX = 0,
-        minY = H,
+        minY = SH,
         maxY = 0;
 
-    for (let y = 0; y < H; y += 2) {
-        for (let x = 0; x < W; x += 2) {
-            let idx = y * W + x;
+    for (let y = 0; y < SH; y += 2) {
+        let row = y * SW;
+        for (let x = 0; x < SW; x += 2) {
+            let idx = row + x;
             if (maskBuffer[idx] === 1) {
                 totalX += x;
                 totalY += y;
@@ -176,9 +180,10 @@ function processFrame() {
     }
 
     if (count > 0) {
-        let bx = totalX / count;
-        let by = totalY / count;
-        let br = Math.max(maxX - minX, maxY - minY) / 2;
+        // 320x240 좌표를 640x480으로 2배 확장
+        let bx = (totalX / count) * 2;
+        let by = (totalY / count) * 2;
+        let br = (Math.max(maxX - minX, maxY - minY) / 2) * 2;
         return { center: [Math.round(bx), Math.round(by)], radius: Math.round(br) };
     }
 
@@ -186,7 +191,7 @@ function processFrame() {
 }
 
 // =========================================================
-// [6. 메인 렌더링 루프]
+// [6. 메인 게임 루프]
 // =========================================================
 function update() {
     const currentTime = Date.now() / 1000;
@@ -226,6 +231,7 @@ function update() {
 
     prevBallCenter = ballCenter;
 
+    // 득점 조건 검사
     let isInsideRim = false;
     if (ballCenter !== null) {
         const dist = Math.hypot(ballCenter[0] - hoopCenter[0], ballCenter[1] - hoopCenter[1]);
@@ -310,22 +316,38 @@ function update() {
 }
 
 // =========================================================
-// [7. 마우스 & 키보드 조작]
+// [7. 마우스 좌표 오차 보정 & 키보드 조작]
 // =========================================================
+function getCanvasCoordinates(e) {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.clientX - rect.left;
+    const clientY = e.clientY - rect.top;
+
+    const scaleX = W / rect.width;
+    const scaleY = H / rect.height;
+
+    const x = Math.round(clientX * scaleX);
+    const y = Math.round(clientY * scaleY);
+    return {
+        x: Math.max(0, Math.min(W, x)),
+        y: Math.max(0, Math.min(H, y))
+    };
+}
+
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 
 canvas.addEventListener('mousedown', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const x = Math.round((e.clientX - rect.left) * (W / rect.width));
-    const y = Math.round((e.clientY - rect.top) * (H / rect.height));
+    const coords = getCanvasCoordinates(e);
 
-    if (e.button === 0) { // 좌클릭: 색상 추출 및 S/V 슬라이더 동기화
-        const pCtx = processCanvas.getContext('2d');
-        const pData = pCtx.getImageData(x, y, 1, 1).data;
+    if (e.button === 0) { // 좌클릭: 공 색상 추출 및 슬라이더 수치 자동 동기화
+        const pX = Math.floor(coords.x / 2);
+        const pY = Math.floor(coords.y / 2);
+
+        const pData = processCtx.getImageData(pX, pY, 1, 1).data;
         const hsv = rgbToHsv(pData[0], pData[1], pData[2]);
 
-        const sMin = Math.max(0, hsv[1] - 60);
-        const vMin = Math.max(0, hsv[2] - 70);
+        const sMin = Math.max(40, hsv[1] - 60);
+        const vMin = Math.max(40, hsv[2] - 70);
 
         lowerOrange = [Math.max(0, hsv[0] - 12), sMin, vMin];
         upperOrange = [Math.min(179, hsv[0] + 12), 255, 255];
@@ -335,7 +357,7 @@ canvas.addEventListener('mousedown', (e) => {
         document.getElementById('inputVMin').value = vMin;
         document.getElementById('valVMin').innerText = vMin;
     } else if (e.button === 2) { // 우클릭: 골대 위치 설정
-        hoopCenter = [x, y];
+        hoopCenter = [coords.x, coords.y];
     }
 });
 
@@ -357,6 +379,7 @@ window.addEventListener('keydown', (e) => {
     }
 });
 
+// 웹캠 카메라 초기화 및 실행
 navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
     .then((stream) => {
         video.srcObject = stream;

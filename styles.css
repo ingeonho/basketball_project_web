@@ -45,14 +45,14 @@ body {
     top: 20px;
     right: 20px;
     width: 280px;
-    background: rgba(15, 20, 30, 0.85);
+    background: rgba(15, 20, 30, 0.9);
     border: 1px solid #00d7ff;
     border-radius: 10px;
     padding: 15px;
     box-shadow: 0 0 20px rgba(0, 215, 255, 0.3);
     backdrop-filter: blur(6px);
     z-index: 10;
-    transition: all 0.3s ease;
+    transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 .control-panel.collapsed .panel-body {

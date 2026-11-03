@@ -7,29 +7,32 @@ canvas.width = 1280;
 canvas.height = 720;
 
 // =========================================================
-// [1. 오탐지 방지 필터 설정값]
+// [1. 바닥 튕김 & 오탐지 방지 필터 설정값]
 // =========================================================
-const MIN_PIXEL_COUNT = 40; // 감지할 최소 픽셀 수 (작은 자잘한 노이즈 무시)
-const MIN_BALL_RADIUS = 20; // 최소 인정 반지름 (픽셀)
-const MAX_BALL_RADIUS = 160; // 최대 인정 반지름 (픽셀)
-const MIN_ASPECT_RATIO = 0.65; // 가로/세로 비율 (1.0에 가까울수록 정원형)
-const MIN_DENSITY = 0.30; // 영역 내 픽셀 밀도 (흩어진 픽셀 방지)
+const MIN_PIXEL_COUNT = 30; // 최소 픽셀 수
+const MIN_BALL_RADIUS = 15; // 최소 인정 반지름
+const MAX_BALL_RADIUS = 70; // 최대 인정 반지름 (크기 팽창 방지)
+const MIN_ASPECT_RATIO = 0.70; // 정원형 비율 (가로/세로)
+const MIN_DENSITY = 0.35; // 픽셀 응집 밀도
 
 // =========================================================
-// [2. 게임 상태 변수]
+// [2. 게임 상태 및 공 이동 추적 변수]
 // =========================================================
 let score = 0;
-let hoopCenter = { x: 640, y: 360 }; // 림 중심 위치
-let hoopRadius = 120; // 림 반지름
+let hoopCenter = { x: 640, y: 360 };
+let hoopRadius = 120;
 
-let lowerOrange = [3, 90, 70]; // 공 HSV 기본값
+let lowerOrange = [3, 90, 70];
 let upperOrange = [22, 255, 255];
 
 let hasScoredThisEntry = false;
 let lastScoreTime = 0;
 const LOCKOUT_TIME = 1.0; // 득점 후 1초간 재감지 방지
 
-// 오프스크린 분석 캔버스 (320x240)
+// 공의 전 프레임 위치 추적 (낙하 방향 검증용)
+let prevBallCenter = null;
+
+// 분석용 오프스크린 캔버스
 const processCanvas = document.createElement('canvas');
 const processCtx = processCanvas.getContext('2d');
 processCanvas.width = 320;
@@ -65,7 +68,7 @@ function rgbToHsv(r, g, b) {
 }
 
 // =========================================================
-// [3. 정밀 공 트래킹 및 형태 검증 필터]
+// [3. 정밀 공 트래킹]
 // =========================================================
 function trackBall() {
     processCtx.drawImage(video, 0, 0, 320, 240);
@@ -99,30 +102,27 @@ function trackBall() {
         }
     }
 
-    // [검증 1] 최소 픽셀 수 필터링
     if (count < MIN_PIXEL_COUNT) return null;
 
     const bw = maxX - minX;
     const bh = maxY - minY;
     if (bw <= 0 || bh <= 0) return null;
 
-    // [검증 2] 원형 형태 (가로/세로 비율) 검사
+    // 가로/세로 비율 및 밀도 검사
     const aspectRatio = Math.min(bw, bh) / Math.max(bw, bh);
     if (aspectRatio < MIN_ASPECT_RATIO) return null;
 
-    // [검증 3] 픽셀 응집 밀도 검사 (바운딩 박스 대비 채움 비율)
     const area = bw * bh;
     const density = count / area;
     if (density < MIN_DENSITY) return null;
 
-    // 좌표 비례 확장 (320x240 -> 1280x720)
     const scaleX = canvas.width / 320;
     const scaleY = canvas.height / 240;
     let bx = (totalX / count) * scaleX;
     let by = (totalY / count) * scaleY;
     let br = (Math.max(bw * scaleX, bh * scaleY)) / 2;
 
-    // [검증 4] 공 반지름 크기 필터링
+    // 공 크기 제한 (초록원 거대화 차단)
     if (br < MIN_BALL_RADIUS || br > MAX_BALL_RADIUS) return null;
 
     return { x: bx, y: by, r: br };
@@ -135,25 +135,37 @@ function loop() {
     const currentTime = Date.now() / 1000;
     const isLockedOut = (currentTime - lastScoreTime) < LOCKOUT_TIME;
 
-    // 영상 출력
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // 공 트래킹 및 득점 조건 검사
     const ball = trackBall();
 
     if (ball) {
-        // 검증 통과한 공만 원형 표시
+        // 공의 이동 방향(Y축 변화량) 계산
+        let isMovingDown = false;
+        if (prevBallCenter) {
+            let dy = ball.y - prevBallCenter.y; // dy > 0 이면 아래로 낙하 중
+            if (dy > 1.5) { // 최소 1.5px 이상 아래로 떨어지는 중이어야 인정
+                isMovingDown = true;
+            }
+        }
+        prevBallCenter = { x: ball.x, y: ball.y };
+
+        // 공 외곽선 (초록색 원)
         ctx.beginPath();
         ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
         ctx.strokeStyle = isLockedOut ? '#888888' : '#00ff88';
         ctx.lineWidth = 4;
         ctx.stroke();
 
+        // 림 중심과의 거리 계산
         const dist = Math.hypot(ball.x - hoopCenter.x, ball.y - hoopCenter.y);
-        const isInsideHoop = dist < (hoopRadius * 0.85);
 
+        // 득점 판정 범위 (림 정중앙 진입 필요)
+        const isInsideHoop = dist < (hoopRadius * 0.55);
+
+        // 득점 조건: 림 중앙 진입 + 위에서 아래로 낙하 중 + 락아웃 아님
         if (isInsideHoop) {
-            if (!hasScoredThisEntry && !isLockedOut) {
+            if (!hasScoredThisEntry && !isLockedOut && isMovingDown) {
                 score += 1;
                 hasScoredThisEntry = true;
                 lastScoreTime = currentTime;
@@ -161,13 +173,22 @@ function loop() {
         } else {
             hasScoredThisEntry = false;
         }
+    } else {
+        prevBallCenter = null;
     }
 
-    // 골대 표시
+    // 골대 표시 (외곽선 + 타깃 중앙링)
     ctx.beginPath();
     ctx.arc(hoopCenter.x, hoopCenter.y, hoopRadius, 0, Math.PI * 2);
     ctx.strokeStyle = isLockedOut ? '#ff8800' : '#00d7ff';
     ctx.lineWidth = 5;
+    ctx.stroke();
+
+    // 내부에 득점 정밀 타깃 표시 (노란색 원)
+    ctx.beginPath();
+    ctx.arc(hoopCenter.x, hoopCenter.y, hoopRadius * 0.55, 0, Math.PI * 2);
+    ctx.strokeStyle = '#ffff00';
+    ctx.lineWidth = 1;
     ctx.stroke();
 
     // 점수판 UI
@@ -194,11 +215,9 @@ canvas.addEventListener('mousedown', (e) => {
     const x = (e.clientX - rect.left) * (canvas.width / rect.width);
     const y = (e.clientY - rect.top) * (canvas.height / rect.height);
 
-    if (e.button === 2) {
-        // 우클릭: 골대 위치 지정
+    if (e.button === 2) { // 우클릭: 골대 위치 지정
         hoopCenter = { x: Math.round(x), y: Math.round(y) };
-    } else if (e.button === 0) {
-        // 좌클릭: 공 색상 지정 (실제 농구공 중앙 클릭)
+    } else if (e.button === 0) { // 좌클릭: 공 색상 지정
         const px = Math.floor((x / canvas.width) * 320);
         const py = Math.floor((y / canvas.height) * 240);
         const pData = processCtx.getImageData(px, py, 1, 1).data;

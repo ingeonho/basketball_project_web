@@ -12,6 +12,51 @@
     <div class="container">
         <video id="webcam" autoplay playsinline muted></video>
         <canvas id="gameCanvas" width="640" height="480"></canvas>
+
+        <!-- 실시간 범위 조절 파라미터 패널 -->
+        <div class="control-panel" id="controlPanel">
+            <div class="panel-header">
+                <h3>🎛️ 실시간 감지 범위 조절</h3>
+                <button id="togglePanelBtn">접기 (Tab)</button>
+            </div>
+
+            <div class="panel-body">
+                <div class="control-group">
+                    <label>공 최소 반지름: <b id="valMinRadius">14</b>px</label>
+                    <input type="range" id="inputMinRadius" min="5" max="50" value="14">
+                </div>
+
+                <div class="control-group">
+                    <label>공 최대 반지름: <b id="valMaxRadius">60</b>px</label>
+                    <input type="range" id="inputMaxRadius" min="20" max="150" value="60">
+                </div>
+
+                <div class="control-group">
+                    <label>최소 이동 속도: <b id="valMinSpeed">1.2</b></label>
+                    <input type="range" id="inputMinSpeed" min="0.0" max="10.0" step="0.1" value="1.2">
+                </div>
+
+                <div class="control-group">
+                    <label>림 반지름: <b id="valHoopRadius">80</b>px</label>
+                    <input type="range" id="inputHoopRadius" min="30" max="200" value="80">
+                </div>
+
+                <div class="control-group">
+                    <label>감지 대기 시간: <b id="valLockout">1.5</b>s</label>
+                    <input type="range" id="inputLockout" min="0.5" max="4.0" step="0.1" value="1.5">
+                </div>
+
+                <div class="control-group">
+                    <label>HSV S(채도) 최소: <b id="valSMin">90</b></label>
+                    <input type="range" id="inputSMin" min="0" max="255" value="90">
+                </div>
+
+                <div class="control-group">
+                    <label>HSV V(명도) 최소: <b id="valVMin">70</b></label>
+                    <input type="range" id="inputVMin" min="0" max="255" value="70">
+                </div>
+            </div>
+        </div>
     </div>
     <script src="script.js"></script>
 </body>

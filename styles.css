@@ -30,12 +30,76 @@ body {
     display: none;
 }
 
-
-/* 640x480 해상도를 비율 손상 없이 모니터 전체 화면으로 확장 */
-
 #gameCanvas {
     width: 100vw;
     height: 100vh;
     object-fit: contain;
     cursor: crosshair;
+}
+
+
+/* 조작 패널 오버레이 */
+
+.control-panel {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 280px;
+    background: rgba(15, 20, 30, 0.85);
+    border: 1px solid #00d7ff;
+    border-radius: 10px;
+    padding: 15px;
+    box-shadow: 0 0 20px rgba(0, 215, 255, 0.3);
+    backdrop-filter: blur(6px);
+    z-index: 10;
+    transition: all 0.3s ease;
+}
+
+.control-panel.collapsed .panel-body {
+    display: none;
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    border-bottom: 1px solid rgba(0, 215, 255, 0.3);
+    padding-bottom: 8px;
+}
+
+.panel-header h3 {
+    font-size: 14px;
+    color: #00d7ff;
+}
+
+.panel-header button {
+    background: #222533;
+    color: #aaa;
+    border: 1px solid #444;
+    padding: 4px 8px;
+    font-size: 11px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.control-group {
+    margin-bottom: 10px;
+}
+
+.control-group label {
+    display: block;
+    font-size: 12px;
+    color: #cccccc;
+    margin-bottom: 4px;
+}
+
+.control-group label b {
+    color: #00ff88;
+}
+
+.control-group input[type="range"] {
+    width: 100%;
+    accent-color: #00d7ff;
+    cursor: pointer;
 }

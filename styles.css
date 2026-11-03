@@ -28,9 +28,6 @@ body {
     display: none;
 }
 
-
-/* 화면 전체를 가득 채우며 비율을 유지하는 대형 캔버스 */
-
 #gameCanvas {
     width: 100vw;
     height: 100vh;

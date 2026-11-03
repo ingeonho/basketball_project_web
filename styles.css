@@ -2,179 +2,28 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    user-select: none;
-    font-family: 'Orbitron', 'Rajdhani', sans-serif;
 }
 
 body {
-    background-color: #030308;
-    color: #00f3ff;
+    background-color: #121212;
+    color: #ffffff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
     min-height: 100vh;
-    overflow: hidden;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    font-family: sans-serif;
 }
 
-/* 화면 전체를 가득 채우는 사이버펑크 컨테이너 */
-.cyber-container {
+.container {
     position: relative;
-    width: 100vw;
-    height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background: 
-        radial-gradient(circle at 50% 50%, rgba(255, 0, 127, 0.15) 0%, rgba(3, 3, 8, 0.95) 80%),
-        linear-gradient(0deg, rgba(0, 243, 255, 0.05) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0, 243, 255, 0.05) 1px, transparent 1px);
-    background-size: 100% 100%, 40px 40px, 40px 40px;
-}
-
-/* CRT 스캔라인 연출 */
-.scanline {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(
-        to bottom,
-        rgba(255,255,255,0),
-        rgba(255,255,255,0) 50%,
-        rgba(0, 0, 0, 0.3) 50%,
-        rgba(0, 0, 0, 0.3)
-    );
-    background-size: 100% 4px;
-    pointer-events: none;
-    z-index: 10;
 }
 
 #webcam {
     display: none;
 }
 
-/* 캔버스를 창 전체 크기 비율에 맞춰 극대화 */
 #gameCanvas {
-    width: 100vw;
-    height: 100vh;
-    object-fit: contain;
-    box-shadow: 0 0 50px rgba(0, 243, 255, 0.3), inset 0 0 30px rgba(255, 0, 127, 0.3);
-    border: 1px solid rgba(0, 243, 255, 0.4);
+    border: 2px solid #00d7ff;
+    border-radius: 8px;
     cursor: crosshair;
-}
-
-/* 사이버펑크 모달 스타일 (네온 & 절단 각도 디자인) */
-.cyber-modal {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(3, 3, 10, 0.85);
-    backdrop-filter: blur(8px);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 100;
-}
-
-.cyber-modal.hidden {
-    display: none;
-}
-
-.cyber-modal-content {
-    background: #090a14;
-    border: 2px solid #ff007f;
-    box-shadow: 0 0 30px #ff007f, inset 0 0 15px rgba(0, 243, 255, 0.3);
-    padding: 40px;
-    clip-path: polygon(0 0, 92% 0, 100% 8%, 100% 100%, 8% 100%, 0 92%);
-    text-align: center;
-    max-width: 480px;
-    width: 90%;
-    position: relative;
-}
-
-.glitch-title {
-    font-size: 28px;
-    font-weight: 900;
-    color: #00f3ff;
-    text-shadow: 2px 2px #ff007f, -2px -2px #ffe600;
-    letter-spacing: 3px;
-    margin-bottom: 10px;
-}
-
-.cyber-subtitle {
-    color: #ffe600;
-    font-size: 16px;
-    margin-bottom: 15px;
-    text-shadow: 0 0 8px #ffe600;
-}
-
-.cyber-modal-content p {
-    color: #a0a5c0;
-    font-size: 14px;
-    margin-bottom: 25px;
-}
-
-.cyber-modal-content input {
-    width: 100%;
-    padding: 15px;
-    font-size: 22px;
-    font-weight: bold;
-    text-align: center;
-    letter-spacing: 2px;
-    border: 2px solid #00f3ff;
-    background: #030408;
-    color: #00f3ff;
-    margin-bottom: 25px;
-    outline: none;
-    box-shadow: inset 0 0 10px rgba(0, 243, 255, 0.5);
-}
-
-.cyber-modal-content input:focus {
-    border-color: #ff007f;
-    box-shadow: 0 0 15px #ff007f, inset 0 0 15px rgba(255, 0, 127, 0.5);
-}
-
-.cyber-modal-content button {
-    width: 100%;
-    padding: 15px;
-    font-size: 18px;
-    font-weight: 900;
-    letter-spacing: 2px;
-    clip-path: polygon(0 0, 90% 0, 100% 30%, 100% 100%, 10% 100%, 0 70%);
-    border: none;
-    background: linear-gradient(135deg, #ff007f, #ffe600);
-    color: #000;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.cyber-modal-content button:hover {
-    background: linear-gradient(135deg, #00f3ff, #ff007f);
-    color: #fff;
-    box-shadow: 0 0 20px #00f3ff;
-}
-
-/* 관리자 안내 알림 */
-.cyber-notice {
-    position: absolute;
-    top: 25px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(255, 0, 127, 0.9);
-    border: 1px solid #ffe600;
-    color: #fff;
-    padding: 12px 30px;
-    font-weight: bold;
-    font-size: 16px;
-    letter-spacing: 1px;
-    box-shadow: 0 0 25px #ff007f;
-    z-index: 101;
-    pointer-events: none;
-}
-
-.cyber-notice.hidden {
-    display: none;
 }

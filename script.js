@@ -7,29 +7,31 @@ canvas.width = 1280;
 canvas.height = 720;
 
 // =========================================================
-// [1. 바닥 튕김 & 오탐지 방지 필터 설정값]
+// [1. 그물/배경 오탐지 차단 필터 설정값]
 // =========================================================
-const MIN_PIXEL_COUNT = 30; // 최소 픽셀 수
-const MIN_BALL_RADIUS = 15; // 최소 인정 반지름
-const MAX_BALL_RADIUS = 70; // 최대 인정 반지름 (크기 팽창 방지)
-const MIN_ASPECT_RATIO = 0.70; // 정원형 비율 (가로/세로)
-const MIN_DENSITY = 0.35; // 픽셀 응집 밀도
+const MIN_PIXEL_COUNT = 90; // 얇은 그물 실 오탐지 방지 (30 -> 90 상향)
+const MIN_BALL_RADIUS = 20; // 최소 인정 반지름
+const MAX_BALL_RADIUS = 80; // 최대 인정 반지름
+const MIN_ASPECT_RATIO = 0.75; // 정원형 비율 (가로/세로)
+const MIN_DENSITY = 0.40; // 픽셀 응집 밀도 (더 빽빽한 덩어리만 인정)
+const MIN_BALL_SPEED = 2.5; // [핵심] 최소 이동 속도 (멈춰있는 그물 완전히 무시)
 
 // =========================================================
-// [2. 게임 상태 및 공 이동 추적 변수]
+// [2. 게임 상태 및 변수]
 // =========================================================
 let score = 0;
 let hoopCenter = { x: 640, y: 360 };
 let hoopRadius = 120;
 
-let lowerOrange = [3, 90, 70];
+// S(채도), V(명도) 하한선을 높여 옅은 그물 실 색상 제외
+let lowerOrange = [3, 120, 100];
 let upperOrange = [22, 255, 255];
 
 let hasScoredThisEntry = false;
 let lastScoreTime = 0;
-const LOCKOUT_TIME = 1.0; // 득점 후 1초간 재감지 방지
+const LOCKOUT_TIME = 1.0;
 
-// 공의 전 프레임 위치 추적 (낙하 방향 검증용)
+// 공의 전 프레임 위치 및 속도 추적 변수
 let prevBallCenter = null;
 
 // 분석용 오프스크린 캔버스
@@ -102,16 +104,18 @@ function trackBall() {
         }
     }
 
+    // 1. 최소 픽셀 수 필터 (얇은 그물 실 제거)
     if (count < MIN_PIXEL_COUNT) return null;
 
     const bw = maxX - minX;
     const bh = maxY - minY;
     if (bw <= 0 || bh <= 0) return null;
 
-    // 가로/세로 비율 및 밀도 검사
+    // 2. 가로/세로 비율 검사
     const aspectRatio = Math.min(bw, bh) / Math.max(bw, bh);
     if (aspectRatio < MIN_ASPECT_RATIO) return null;
 
+    // 3. 픽셀 밀도 검사 (면적 대비 꽉 차있는지)
     const area = bw * bh;
     const density = count / area;
     if (density < MIN_DENSITY) return null;
@@ -122,7 +126,7 @@ function trackBall() {
     let by = (totalY / count) * scaleY;
     let br = (Math.max(bw * scaleX, bh * scaleY)) / 2;
 
-    // 공 크기 제한 (초록원 거대화 차단)
+    // 4. 공 크기 범위 제한
     if (br < MIN_BALL_RADIUS || br > MAX_BALL_RADIUS) return null;
 
     return { x: bx, y: by, r: br };
@@ -140,32 +144,37 @@ function loop() {
     const ball = trackBall();
 
     if (ball) {
-        // 공의 이동 방향(Y축 변화량) 계산
+        // 이동 속도 및 낙하 방향 계산
+        let ballSpeed = 0;
         let isMovingDown = false;
+
         if (prevBallCenter) {
-            let dy = ball.y - prevBallCenter.y; // dy > 0 이면 아래로 낙하 중
-            if (dy > 1.5) { // 최소 1.5px 이상 아래로 떨어지는 중이어야 인정
+            let dx = ball.x - prevBallCenter.x;
+            let dy = ball.y - prevBallCenter.y;
+            ballSpeed = Math.hypot(dx, dy); // 프레임간 이동 거리(속도)
+
+            if (dy > 1.2) {
                 isMovingDown = true;
             }
         }
-        prevBallCenter = { x: ball.x, y: ball.y };
 
-        // 공 외곽선 (초록색 원)
-        ctx.beginPath();
-        ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
-        ctx.strokeStyle = isLockedOut ? '#888888' : '#00ff88';
-        ctx.lineWidth = 4;
-        ctx.stroke();
+        // 멈춰있는 그물은 완전히 무시 (속도가 일정 이상 움직일 때만 원 표시)
+        const isDynamicBall = ballSpeed >= MIN_BALL_SPEED;
 
-        // 림 중심과의 거리 계산
+        if (isDynamicBall || isLockedOut) {
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+            ctx.strokeStyle = isLockedOut ? '#888888' : '#00ff88';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+        }
+
         const dist = Math.hypot(ball.x - hoopCenter.x, ball.y - hoopCenter.y);
-
-        // 득점 판정 범위 (림 정중앙 진입 필요)
         const isInsideHoop = dist < (hoopRadius * 0.55);
 
-        // 득점 조건: 림 중앙 진입 + 위에서 아래로 낙하 중 + 락아웃 아님
+        // 득점 조건: 림 중앙 진입 + 아래로 낙하 중 + 움직이는 공 + 락아웃 아님
         if (isInsideHoop) {
-            if (!hasScoredThisEntry && !isLockedOut && isMovingDown) {
+            if (!hasScoredThisEntry && !isLockedOut && isMovingDown && isDynamicBall) {
                 score += 1;
                 hasScoredThisEntry = true;
                 lastScoreTime = currentTime;
@@ -173,25 +182,25 @@ function loop() {
         } else {
             hasScoredThisEntry = false;
         }
+
+        prevBallCenter = { x: ball.x, y: ball.y };
     } else {
         prevBallCenter = null;
     }
 
-    // 골대 표시 (외곽선 + 타깃 중앙링)
+    // 골대 및 UI 표시
     ctx.beginPath();
     ctx.arc(hoopCenter.x, hoopCenter.y, hoopRadius, 0, Math.PI * 2);
     ctx.strokeStyle = isLockedOut ? '#ff8800' : '#00d7ff';
     ctx.lineWidth = 5;
     ctx.stroke();
 
-    // 내부에 득점 정밀 타깃 표시 (노란색 원)
     ctx.beginPath();
     ctx.arc(hoopCenter.x, hoopCenter.y, hoopRadius * 0.55, 0, Math.PI * 2);
     ctx.strokeStyle = '#ffff00';
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // 점수판 UI
     ctx.fillStyle = 'rgba(10, 15, 25, 0.85)';
     ctx.fillRect(30, 30, 260, 80);
     ctx.strokeStyle = '#00d7ff';
@@ -215,20 +224,20 @@ canvas.addEventListener('mousedown', (e) => {
     const x = (e.clientX - rect.left) * (canvas.width / rect.width);
     const y = (e.clientY - rect.top) * (canvas.height / rect.height);
 
-    if (e.button === 2) { // 우클릭: 골대 위치 지정
+    if (e.button === 2) {
         hoopCenter = { x: Math.round(x), y: Math.round(y) };
-    } else if (e.button === 0) { // 좌클릭: 공 색상 지정
+    } else if (e.button === 0) {
         const px = Math.floor((x / canvas.width) * 320);
         const py = Math.floor((y / canvas.height) * 240);
         const pData = processCtx.getImageData(px, py, 1, 1).data;
         const hsv = rgbToHsv(pData[0], pData[1], pData[2]);
 
-        lowerOrange = [Math.max(0, hsv[0] - 10), Math.max(50, hsv[1] - 60), Math.max(50, hsv[2] - 70)];
+        // 공을 마우스 좌클릭으로 찍을 때 짙은 주황색 위주로 설정
+        lowerOrange = [Math.max(0, hsv[0] - 10), Math.max(100, hsv[1] - 50), Math.max(100, hsv[2] - 50)];
         upperOrange = [Math.min(180, hsv[0] + 10), 255, 255];
     }
 });
 
-// 웹캠 카메라 시작
 navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
     .then((stream) => {
         video.srcObject = stream;

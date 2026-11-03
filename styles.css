@@ -5,25 +5,37 @@
 }
 
 body {
-    background-color: #121212;
+    background-color: #08090c;
     color: #ffffff;
     display: flex;
     justify-content: center;
     align-items: center;
     min-height: 100vh;
-    font-family: sans-serif;
+    overflow: hidden;
+    font-family: 'Segoe UI', sans-serif;
 }
 
 .container {
     position: relative;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 #webcam {
     display: none;
 }
 
+
+/* 화면 전체를 가득 채우며 비율을 유지하는 대형 캔버스 */
+
 #gameCanvas {
+    width: 100vw;
+    height: 100vh;
+    object-fit: contain;
+    background-color: #000000;
     border: 2px solid #00d7ff;
-    border-radius: 8px;
     cursor: crosshair;
 }
